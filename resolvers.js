@@ -1,5 +1,7 @@
 const Employee = require('./models/Employee');
-
+const User = require('./models/User');
+const bcrypt = require('bcrypt')
+const jwt = require('jsonwebtoken');
     const handleErrors = (err) => {
        
         let errors = { firstname: '', lastname: '' ,email: '', gender: '' ,salary:0};
@@ -26,10 +28,47 @@ const Employee = require('./models/Employee');
         
     }
       
-    
+    const generateToken = (user) => {
+        const token = jwt.sign(
+          { userId: user.id, username: user.username },
+          'YOUR_SECRET_KEY',
+          { expiresIn: '1h' }
+        );
+        return token;
+      };
+      
   
 exports.resolvers = {
     Query: {
+        login: async (parent, args) => {
+            const { email, password } = args;
+      console.log(email)
+      console.log(password)
+            const user = await User.findOne({ email });
+            if (!user) {
+           
+              throw new Error('Invalid credentials');
+            }
+      
+            const isPasswordMatch = await bcrypt.compare(password, user.password);
+            if (!isPasswordMatch) {
+              throw new Error('Invalid credentials');
+            }
+      
+            const token = generateToken(user);
+         
+            
+
+           return {
+              user: {
+                username: user.username,
+                email: user.email
+              },
+              token
+            };
+              
+            
+          },
         getEmployees: async (parent, args) => {
             return Employee.find({})
         },
@@ -61,7 +100,33 @@ exports.resolvers = {
             return errors;
           }
         },
+        signup: async (parent, args) => {
+            const { username, email, password } = args;
       
+            const existingUser = await User.findOne({ $or: [{ username }, { email }] });
+            if (existingUser) {
+              throw new Error('User already exists');
+            }
+      
+          
+            const user = new User({ username, email, password });
+            const savedUser = await user.save();
+      const msg ="You have successfully signUp!"
+            console.log(savedUser)
+          
+            return {
+              user: {
+                username: savedUser.username,
+                email: savedUser.email,
+                password: savedUser.password
+
+              },
+              msg
+            }
+              
+         
+          },
+        
 updateEmployee: async (parent, args) => {
           
           if (!args.id){
@@ -113,7 +178,16 @@ updateEmployee: async (parent, args) => {
         if (!deletedEmployee) {
             throw new Error("Employee not found");
           }
-          return deletedEmployee;}
+          const msg  ="Employee Deleted!"
+          return {
+          
+             
+              email: deletedEmployee.email,
+              id: deletedEmployee._id,
+              msg : msg
+           
+          }
+        }
      
         catch (err){
         if (err.name === "CastError" && err.kind === "ObjectId") {
